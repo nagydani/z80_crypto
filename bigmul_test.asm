@@ -1,51 +1,78 @@
-; Tests 256 x 256 bit = 512 bit integer multiplication
-; In: XVALUE, YVALUE: little-endian 256 bit multiplicands, EXPECT: little-endian 512 bit expected product
-; Out: B length of erroneous suffix (MSB) of the product
+; Tests all 16 x 16 bit = 32 bit integer multiplications
+; Out: BC = 0, if correct, prefix error length otherwise
 	ORG	0x8000
-START:	LD	HL,PRODUCT
-	EXX
+START:	EXX
 	PUSH	HL
+	EXX
+
+	LD	IX,XVALUE
+
+LOOP:	LD	B,(IX+0)
+	LD	C,(IX+2)
+	CALL	MUL8
+	LD	(EXPECT),HL
+	LD	B,(IX+1)
+	LD	C,(IX+3)
+	CALL	MUL8
+	LD	(EXPECT+2),HL
+	LD	B,(IX+0)
+	LD	C,(IX+3)
+	CALL	MUL8
+	CALL	ADDMID
+	LD	B,(IX+1)
+	LD	C,(IX+2)
+	CALL	MUL8
+	CALL	ADDMID
+
+	LD	HL,PRODUCT
+	EXX
 	LD	HL,XVALUE
 	LD	DE,YVALUE
-	LD	B,0x20
+	LD	B,2
 	CALL	BIGMUL
-	POP	HL
 	EXX
-	LD	DE,EXPECT + 0x40
-	LD	BC,0x4000
-CHECK:	DEC	DE
-	DEC	HL
+	LD	DE,PRODUCT
+	LD	B,4
+L2:	DEC	HL
+	DEC	DE
 	LD	A,(DE)
 	CP	(HL)
-	RET	NZ
-	DJNZ	CHECK
+	JR	NZ,ERROR
+	DJNZ	L2
+
+	INC	(IX+0)
+	JR	NZ,LOOP
+	INC	(IX+1)
+	JR	NZ,LOOP
+	INC	(IX+2)
+	JR	NZ,LOOP
+	INC	(IX+3)
+	JR	NZ,LOOP
+
+	POP	HL
+	EXX
+	LD	BC,0
 	RET
+ERROR:	POP	HL
+	LD	A,B
+	EXX
+	LD	C,A
+	LD	B,0
+	RET
+
+ADDMID:	LD	A,(EXPECT+1)
+	ADD	A,L
+	LD	(EXPECT+1),A
+	LD	A,(EXPECT+2)
+	ADC	A,H
+	LD	(EXPECT+2),A
+	RET	NC
+	INC	(IX+7)
+	RET
+
 	INCLUDE "bigmul.asm"
 	INCLUDE "mul8bit.asm"
-XVALUE:
-YVALUE:
-ALLFF:	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-EXPECT:	DEFB	0x01, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0x00, 0x00, 0x00, 0x00
-	DEFB	0xFE, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-PRODUCT:EQU	ALLFF + 0x100
+XVALUE:	DEFS	2
+YVALUE:	DEFS	2
+EXPECT:	DEFS	4
+PRODUCT:

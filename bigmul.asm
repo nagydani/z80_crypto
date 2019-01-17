@@ -1,5 +1,5 @@
 ; Karatsuba multiplication
-; In: HL,DE: pointers to multiplicands, B: length of multiplicands in bytes, HL': pointer to product + buffer
+; In: HL,DE pointers to multiplicands, B: length of multiplicands in bytes, HL' pointer to product + buffer
 ; Out: HL' pointer to after product (product at HL' - 2*B)
 ; Pollutes: AF, AF', C, BC', DE', 2*B+1 bytes after HL'
 ; Note: crossing of page boundaries prohibited!
@@ -73,6 +73,7 @@ MULBIG:	INC	B
 	POP	AF	; restore carry
 	LD	A,B
 	EXX
+	LD	(HL),0
 ; [  X0  *   Y0  ][  X1  *   Y1  ]DE'[X0+X1 ]HL'[Y0+Y1 ][(X0+X1)(Y0+Y1)]HL
 	LD	B,A
 	JR	NC,MBNC1
@@ -198,7 +199,7 @@ MBADD:	LD	A,(DE)
 	LD	E,L
 MBINC:	INC	(HL)
 	INC	HL
-	JR	NZ,MBINC
+	JR	Z,MBINC
 	LD	L,E
 MBZERO:	LD	A,L
 	ADD	C
