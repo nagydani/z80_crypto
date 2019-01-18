@@ -1,0 +1,321 @@
+; Modular multiplication
+; In: HL,DE pointers to multiplicands, HL' pointer to product + buffer
+; Out: HL pointer to after product (product at HL - 0x20)
+; Pollutes: AF, AF', BC, BC', DE, HL'= original HL, DE'= original DE
+MODMUL:	LD	B,0x20
+	CALL	BIGMUL
+	EXX
+	LD	B,0x20
+	LD	A,L
+	SUB	A,B
+	LD	E,A
+	LD	D,H
+	SUB	A,B
+	LD	L,A
+	CALL	MODADDX
+	LD	A,C
+	ADD	A,0x20
+	LD	L,A
+	CALL	MODDOUB
+	LD	A,0x2F
+MODMULL:EX	AF,AF'
+	LD	L,C
+	CALL	MODDOUB
+	EX	AF,AF'
+	ADD	A,A
+	JR	NC,MODMULN
+	EX	AF,AF'
+	LD	A,C
+	SUB	A,0x20
+	LD	L,A
+	LD	E,C
+	CALL	MODADD
+	LD	A,C
+	ADD	0x20
+	LD	C,A
+	EX	AF,AF'
+MODMULN:JR	NZ,MODMULL
+	LD	A,E
+	SUB	A,0x20
+	LD	E,A
+	LD	A,0x17
+MODSHL:	EX	AF,AF'
+	LD	L,E
+	CALL	MODDOUB
+	EX	AF,AF'
+	DEC	A
+	JR	NZ,MODSHL
+	LD	A,E
+	SUB	A,0x20
+	LD	L,A
+; Modular addition/accumulation
+; In: HL pointer to 32-byte accumulator, DE pointer to 32-byte number to add
+; Pollutes: AF, BC, E, L
+MODADD:	LD	B,0x20
+MODADDX:LD	C,L
+	AND	A
+MADDL:	LD	A,(DE)
+	ADC	A,(HL)
+	LD	(HL),A
+	INC	L
+	INC	E
+	DJNZ	MADDL
+	RET	NC
+MODCORR:LD	L,C
+	LD	A,(HL)
+	ADD	A,0xD1
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,0x03
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,B
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,B
+	LD	(HL),A
+	INC	L
+	INC	B
+	LD	A,(HL)
+	ADC	A,B
+	LD	(HL),A
+	RET	NC
+	INC	L
+	LD	B,0x1B
+MINCL:	INC	(HL)
+	RET	NZ
+	INC	L
+	DJNZ	MINCL
+	RET
+; Modular doubling
+; In: HL pointer to 32-byte number to double
+; Pollutes: AF, BC, L
+MODDOUB:LD	B,0x20
+MODDBX:	LD	C,L
+	OR	A
+MODDBL:	RL	(HL)
+	INC	L
+	DJNZ	MODDBL
+	JR	C,MODCORR
+	RET
+
+; Modular inverse
+; In: HL pointer to 32-byte number to invert (X) , DE pointer to result
+MODINV:	LD	(MODINVA),DE
+	LD	DE,MODINVU
+	BIT	0,(HL)
+	JR	Z,MODINVE
+	; If X is odd, U := X
+	LD	BC,0x20
+	LD	A,C
+	LD	(DE),A
+	INC	E
+	LDIR
+	EX	DE,HL
+	LD	(HL),B
+	JR	MODINV0
+	; If X is even, U := X + P
+MODINVE:LD	A,0x2F
+	ADD	A,(HL)
+	INC	E
+	LD	(DE),A
+	INC	L
+	INC	E
+	LD	A,(HL)
+	ADC	A,0xFC
+	LD	(DE),A
+	INC	L
+	INC	E
+	LD	BC,0x2FF
+	CALL	ADDSAME
+	LD	A,(HL)
+	ADC	A,0xFE
+	LD	(DE),A
+	INC	L
+	INC	E
+	LD	B,0x1B
+	CALL	ADDSAME
+	SBC	A,A
+	AND	1
+	LD	(DE),A
+	ADD	0x20
+	LD	(MODINVU),A
+	; A := 0
+MODINV0:LD	HL,(MODINVA)
+	LD	E,L
+	LD	D,H
+	INC	E
+	LD	C,0x1F
+	LD	(HL),B
+	LDIR
+	; V := P
+	LD	HL,MODP
+	LD	DE,MODINVV
+	LD	C,7
+	LDIR
+	LD	L,E
+	LD	H,D
+	DEC	L
+	LD	C,0x1A
+	LDIR
+	EX	DE,HL
+	LD	(HL),C
+	; D = P - 1
+	LD	DE,MODINVD + 0x1F
+	DEC	L
+	LD	C,0x20
+	LDDR
+	EX	DE,HL
+	INC	L
+	DEC	(HL)
+	; while V != 1
+MODINVL:LD	HL,MODINVV
+	LD	B,(HL)
+	LD	A,L
+	ADD	A,B
+	LD	L,A
+	XOR	A
+MODINV1:CP	(HL)
+	JR	NZ,MODINV2
+	DEC	L
+	DJNZ	MODINV1
+MODINV2:LD	L,MODINVV - 0x100 * (MODINVV / 0x100)
+	LD	(HL),B
+	LD	A,1
+	CP	B
+	JR	NZ,MODINVC
+	INC	L
+	CP	(HL)
+	JR	NZ,MODINVC
+	RET
+	; while V < U
+MODINVC:LD	HL,MODINVV
+	LD	B,(HL)
+	LD	DE,MODINVU
+	LD	A,(DE)
+	CP	B
+	JR	C,MODINVS
+	LD	B,A
+	LD	C,A
+	ADD	A,L
+	LD	L,A
+	LD	A,B
+	ADD	A,E
+	LD	E,A
+MODINVX:LD	A,(DE)
+	CP	(HL)
+	JR	C,MODINVS
+	DEC	E
+	DEC	L
+	DJNZ	MODINVX
+	; U := U - V
+	LD	B,C
+MODINVY:INC	L
+	INC	E
+	LD	A,(DE)
+	SBC	A,(HL)
+	LD	(DE),A
+	DJNZ	MODINVY
+	EX	DE,HL
+	XOR	A
+	LD	B,C
+MODINV3:CP	(HL)
+	JR	NZ,MODINV4
+	DEC	L
+	DJNZ	MODINV3
+MODINV4:LD      L, MODINVU - 0x100 * (MODINVU / 0x100)
+	LD	(MODINVUV),HL
+        LD      (HL),B
+	; D := (D + A) mod P
+	LD	L, MODINVD - 0x100 * (MODINVD / 0x100)
+	LD	DE,(MODINVA)
+	CALL	MODADD
+	; If D is odd, D := D + P
+	CALL	MODINV5
+	; V := V - U
+MODINVS:LD	HL,MODINVV
+	LD	(MODINVUV),HL
+	LD	B,(HL)
+	EX	DE,HL
+	LD	HL,MODINVU
+	OR	A
+MODINVZ:INC	L
+	INC	E
+	LD	A,(DE)
+	SBC	A,(HL)
+	LD	(DE),A
+	DJNZ	MODINVZ
+	; A := (A + D) mod P
+	LD	HL,(MODINVA)
+	LD	DE,MODINVD
+	CALL	MODADD
+	; If A is odd, A := A + P
+	CALL	MODINV5
+	JR	MODINVL
+
+; Repeat {If DA is odd {DA := DA + P}; DA := DA / 2; UV := UV / 2} while UV is even
+MODINV5:LD	L,C
+	LD	A,(HL)
+	BIT	0,A
+	JR	Z,MODINV6
+	ADD	A,0x2F
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,0xFC
+	LD	(HL),A
+	INC	L
+	LD	E,0xFF
+	LD	A,(HL)
+	ADC	A,E
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,E
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	ADC	A,0xFE
+	LD	(HL),A
+	LD	B,0x1B
+ACCSAME:INC	L
+	LD	A,(HL)
+	ADC	A,E
+	LD	(HL),A
+	DJNZ	ACCSAME
+	; DA := DA / 2
+MODINVR:LD	B,0x20
+MODINVH:RR	(HL)
+	DEC	L
+	DJNZ	MODINVH
+	; UV : = UV / 2
+	LD	HL,(MODINVUV)
+	LD	A,(HL)
+	LD	B,A
+	ADD	A,L
+	LD	L,A
+MOVINV7:RR	(HL)
+	DEC	L
+	DJNZ	MOVINV7
+	INC	L
+	BIT	0,(HL)
+	JR	Z,MODINV5
+	RET
+
+MODINV6:LD	A,L
+	ADD	A,0x1F
+	LD	L,A
+	JR	MODINVR
+
+ADDSAME:LD	A,(HL)
+	ADC	A,C
+	LD	(DE),A
+	INC	L
+	INC	E
+	DJNZ	ADDSAME
+	RET
+
+MODP:	DEFB	0x20, 0x2F, 0xFC, 0xFF, 0xFF, 0xFE, 0xFF
