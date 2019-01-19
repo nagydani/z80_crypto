@@ -311,22 +311,22 @@ CHIL3:	LD	A,(IX - 0x20)
 	ADD	A,A
 	LD	L,A	; E = B * 4
 	LD	H,IOTAT / 0x100
-	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 0
-	LD	A,(DE)
-	XOR	(HL)
-	LD	(DE),A
-	INC	L
-	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 4
-	LD	A,(DE)
-	XOR	(HL)
-	LD	(DE),A
-	INC	L
-	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 6
-	LD	A,(DE)
-	XOR	(HL)
-	LD	(DE),A
-	INC	L
 	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 7
+	LD	A,(DE)
+	XOR	(HL)
+	LD	(DE),A
+	INC	L
+	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 3
+	LD	A,(DE)
+	XOR	(HL)
+	LD	(DE),A
+	INC	L
+	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 1
+	LD	A,(DE)
+	XOR	(HL)
+	LD	(DE),A
+	INC	L
+	LD	E,KECCAKS - 0x100 * (KECCAKS / 0x100) + 0
 	LD	A,(DE)
 	XOR	(HL)
 	LD	(DE),A
