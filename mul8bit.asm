@@ -32,4 +32,3 @@ NOSWAP:	RRA
 	LD	B,0
 	ADD	HL,BC
 	RET
-	INCLUDE "multab.asm"

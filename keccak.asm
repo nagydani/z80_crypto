@@ -338,95 +338,87 @@ CHIL3:	LD	A,(IX - 0x20)
 ; In: HL base pointer, BC=7, DE=-7
 ; Pollutes: AF, AF'
 
-ROTR1:	SRL	(HL)
+ROTL1:	SLA	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	INC	L
-	RR	(HL)
+	RL	(HL)
 	ADD	HL,DE
 	RET	NC
-	SET	7,(HL)
+	SET	0,(HL)
 	RET
 
-ROTL1:	LD	A,(HL)
-	ADD	A,A
+ROTR1:	LD	A,(HL)
+	RRA
 	ADD	HL,BC
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	DEC	L
-	RL	(HL)
+	RR	(HL)
 	RET
 
-ROTR4:	XOR	A
-	RRD
+ROTL4:	XOR	A
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	INC	L
-	RRD
+	RLD
 	ADD	HL,DE
-	RRCA
-	RRCA
-	RRCA
-	RRCA
 	OR	(HL)
 	LD	(HL),A
 	RET
 
-ROTL4:	LD	A,(HL)
-	RLCA
-	RLCA
-	RLCA
-	RLCA
+ROTR4:	LD	A,(HL)
 	ADD	HL,BC
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	DEC	L
-	RLD
+	RRD
 	RET
 
-ROTR8:	ADD	HL,BC
+ROTL8:	ADD	HL,BC
 	LD	E,L
 	LD	D,H
 	LD	A,(HL)
@@ -444,7 +436,7 @@ ROTR8:	ADD	HL,BC
 	LD	C,7
 	RET
 
-ROTL8:	LD	A,(HL)
+ROTR8:	LD	A,(HL)
 	LD	E,L
 	LD	D,H
 	INC	L
@@ -461,7 +453,7 @@ ROTL8:	LD	A,(HL)
 	DEC	L
 	RET
 
-ROTR16:	ADD	HL,BC
+ROTL16:	ADD	HL,BC
 	LD	E,L
 	LD	D,H
 	LD	A,(HL)
@@ -482,7 +474,7 @@ ROTR16:	ADD	HL,BC
 	LD	BC,7
 	RET
 
-ROTL16:	LD	A,(HL)
+ROTR16:	LD	A,(HL)
 	LD	E,L
 	LD	D,H
 	INC	L
@@ -504,7 +496,7 @@ ROTL16:	LD	A,(HL)
 	DEC	L
 	RET
 
-ROTR24:	ADD	HL,BC
+ROTL24:	ADD	HL,BC
 	LD	E,L
 	LD	D,H
 	LD	A,(HL)
@@ -531,7 +523,7 @@ ROTR24:	ADD	HL,BC
 	LD	BC,7
 	RET
 
-ROTL24: LD	A,(HL)
+ROTR24: LD	A,(HL)
 	LD	E,L
 	LD	D,H
 	INC	L
