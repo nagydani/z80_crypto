@@ -62,7 +62,10 @@ MADDL:	LD	A,(DE)
 	DJNZ	MADDL
 	RET	NC
 MODCORR:LD	L,C
-	LD	A,(HL)
+; Subtract P
+; In: HL pointer to 32-byte accumulator, B = 0
+; Out: CF set, if carry
+MODSUBP:LD	A,(HL)
 	ADD	A,0xD1
 	LD	(HL),A
 	INC	L
@@ -89,6 +92,53 @@ MINCL:	INC	(HL)
 	RET	NZ
 	INC	L
 	DJNZ	MINCL
+	SCF
+	RET
+
+; Modular subtraction/accumulation
+; In: DE pointer to 32-byte accumulator, HL pointer to 32-byte number to subtract
+; Pollutes: AF, BC, E, L
+MODSUB:	LD	B,0x20
+MODSUBX:LD	C,L
+	AND	A
+MSUBL:	LD	A,(DE)
+	SBC	A,(HL)
+	LD	(DE),A
+	INC	L
+	INC	E
+	DJNZ	MSUBL
+	RET	NC
+; Add P
+; In: HL pointer to 32-byte accumulator, B = 0
+; Out: CF set, if NO carry
+MODADDP:LD	A,(HL)
+	SUB	A,0xD1
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	SBC	A,0x03
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	SBC	A,B
+	LD	(HL),A
+	INC	L
+	LD	A,(HL)
+	SBC	A,B
+	LD	(HL),A
+	INC	L
+	INC	B
+	LD	A,(HL)
+	SBC	A,B
+	LD	(HL),A
+	RET	NC
+	INC	L
+	LD	B,0x1B
+MDECL:	DEC	(HL)
+	RET	P
+	INC	L
+	DJNZ	MDECL
+	SCF
 	RET
 ; Modular doubling
 ; In: HL pointer to 32-byte number to double
@@ -106,9 +156,7 @@ MODDBL:	RL	(HL)
 ; In: HL pointer to 32-byte number to invert (X) , DE pointer to result
 MODINV:	LD	(MODINVA),DE
 	LD	DE,MODINVU
-	BIT	0,(HL)
-	JR	Z,MODINVE
-	; If X is odd, U := X
+	; U := X
 	LD	BC,0x20
 	LD	A,C
 	LD	(DE),A
@@ -116,33 +164,15 @@ MODINV:	LD	(MODINVA),DE
 	LDIR
 	EX	DE,HL
 	LD	(HL),B
-	JR	MODINV0
+	LD	L,MODINVU - 0x100 * (MODINVU / 0x100) + 1
+	SCF
+	BIT	0,(HL)
 	; If X is even, U := X + P
-MODINVE:LD	A,0x2F
-	ADD	A,(HL)
-	INC	E
-	LD	(DE),A
-	INC	L
-	INC	E
-	LD	A,(HL)
-	ADC	A,0xFC
-	LD	(DE),A
-	INC	L
-	INC	E
-	LD	BC,0x2FF
-	CALL	ADDSAME
-	LD	A,(HL)
-	ADC	A,0xFE
-	LD	(DE),A
-	INC	L
-	INC	E
-	LD	B,0x1B
-	CALL	ADDSAME
-	SBC	A,A
-	AND	1
-	LD	(DE),A
-	ADD	0x20
-	LD	(MODINVU),A
+	CALL	Z,MODADDP
+	JR	C,MODINV0
+	INC	(HL)
+	LD	L,MODINVU - 0x100 * (MODINVU / 0x100)
+	CALL	MODINVN
 	; A := 0
 MODINV0:LD	HL,(MODINVA)
 	LD	E,L
@@ -173,17 +203,7 @@ MODINV0:LD	HL,(MODINVA)
 	DEC	(HL)
 	; while V != 1
 MODINVL:LD	HL,MODINVV
-	LD	B,(HL)
-	LD	A,L
-	ADD	A,B
-	LD	L,A
-	XOR	A
-MODINV1:CP	(HL)
-	JR	NZ,MODINV2
-	DEC	L
-	DJNZ	MODINV1
-MODINV2:LD	L,MODINVV - 0x100 * (MODINVV / 0x100)
-	LD	(HL),B
+	CALL	MODINVN
 	LD	A,1
 	CP	B
 	JR	NZ,MODINVC
@@ -191,15 +211,15 @@ MODINV2:LD	L,MODINVV - 0x100 * (MODINVV / 0x100)
 	CP	(HL)
 	JR	NZ,MODINVC
 	RET
-	; while V < U
-MODINVC:LD	HL,MODINVV
-	LD	B,(HL)
-	LD	DE,MODINVU
+	; while U > V
+MODINVC:LD	DE,MODINVU
 	LD	A,(DE)
+	LD	HL,MODINVV
+	LD	B,(HL)
 	CP	B
-	JR	C,MODINVS
+	JR	C,MODINVS	; U < V
+	JR	NZ,MODINVW	; V < U
 	LD	B,A
-	LD	C,A
 	ADD	A,L
 	LD	L,A
 	LD	A,B
@@ -208,84 +228,47 @@ MODINVC:LD	HL,MODINVV
 MODINVX:LD	A,(DE)
 	CP	(HL)
 	JR	C,MODINVS
+	JR	NZ,MODINVW
 	DEC	E
 	DEC	L
 	DJNZ	MODINVX
 	; U := U - V
-	LD	B,C
-MODINVY:INC	L
-	INC	E
-	LD	A,(DE)
-	SBC	A,(HL)
-	LD	(DE),A
-	DJNZ	MODINVY
-	EX	DE,HL
-	XOR	A
-	LD	B,C
-MODINV3:CP	(HL)
-	JR	NZ,MODINV4
-	DEC	L
-	DJNZ	MODINV3
-MODINV4:LD      L, MODINVU - 0x100 * (MODINVU / 0x100)
+MODINVW:LD	E,MODINVU - 0x100 * (MODINVU / 0x100)
+	LD	L,MODINVV - 0x100 * (MODINVV / 0x100)
+	CALL	MODINVE
 	LD	(MODINVUV),HL
-        LD      (HL),B
 	; D := (D + A) mod P
 	LD	L, MODINVD - 0x100 * (MODINVD / 0x100)
 	LD	DE,(MODINVA)
 	CALL	MODADD
 	; If D is odd, D := D + P
 	CALL	MODINV5
+	JR	MODINVC
 	; V := V - U
-MODINVS:LD	HL,MODINVV
+MODINVS:LD	DE,MODINVV
+	LD	HL,MODINVU	; MAY BE UNNECESSARY
+	CALL	MODINVE
 	LD	(MODINVUV),HL
-	LD	B,(HL)
-	EX	DE,HL
-	LD	HL,MODINVU
-	OR	A
-MODINVZ:INC	L
-	INC	E
-	LD	A,(DE)
-	SBC	A,(HL)
-	LD	(DE),A
-	DJNZ	MODINVZ
 	; A := (A + D) mod P
 	LD	HL,(MODINVA)
 	LD	DE,MODINVD
 	CALL	MODADD
 	; If A is odd, A := A + P
 	CALL	MODINV5
-	JR	MODINVL
+	JP	MODINVL
 
 ; Repeat {If DA is odd {DA := DA + P}; DA := DA / 2; UV := UV / 2} while UV is even
 MODINV5:LD	L,C
-	LD	A,(HL)
-	BIT	0,A
-	JR	Z,MODINV6
-	ADD	A,0x2F
-	LD	(HL),A
-	INC	L
-	LD	A,(HL)
-	ADC	A,0xFC
-	LD	(HL),A
-	INC	L
-	LD	E,0xFF
-	LD	A,(HL)
-	ADC	A,E
-	LD	(HL),A
-	INC	L
-	LD	A,(HL)
-	ADC	A,E
-	LD	(HL),A
-	INC	L
-	LD	A,(HL)
-	ADC	A,0xFE
-	LD	(HL),A
-	LD	B,0x1B
-ACCSAME:INC	L
-	LD	A,(HL)
-	ADC	A,E
-	LD	(HL),A
-	DJNZ	ACCSAME
+	BIT	0,(HL)
+	SCF
+	LD	B,0
+	CALL	NZ,MODADDP
+	CCF
+	EX	AF,AF'	; save carry
+	LD	A,C
+	ADD	A,0x1F
+	LD	L,A
+	EX	AF,AF'	; restore carry
 	; DA := DA / 2
 MODINVR:LD	B,0x20
 MODINVH:RR	(HL)
@@ -297,25 +280,46 @@ MODINVH:RR	(HL)
 	LD	B,A
 	ADD	A,L
 	LD	L,A
-MOVINV7:RR	(HL)
+MODINV6:RR	(HL)
 	DEC	L
-	DJNZ	MOVINV7
+	DJNZ	MODINV6
 	INC	L
 	BIT	0,(HL)
 	JR	Z,MODINV5
-	RET
+	DEC	L
+	JR	MODINVN
 
-MODINV6:LD	A,L
-	ADD	A,0x1F
-	LD	L,A
-	JR	MODINVR
-
-ADDSAME:LD	A,(HL)
-	ADC	A,C
-	LD	(DE),A
+; Long subtraction
+; In: DE pointer to minuend, HL pointer to subtrahend
+; Output: HL pointer to difference in place of minuend
+; Pollutes: AF, BC, DE
+MODINVE:LD	A,(DE)
+	LD	C,E
+	LD	B,A
+	AND	A
+MODINVY:INC	E
 	INC	L
-	INC	E
-	DJNZ	ADDSAME
+	LD	A,(DE)
+	SBC	A,(HL)
+	LD	(DE),A
+	DJNZ	MODINVY
+	LD	E,C
+	EX	DE,HL
+; Normalize U or V
+; In: HL pointer to U or V to be normalized
+; Pollutes: A, BC
+MODINVN:LD	A,(HL)
+	LD	C,L
+	LD	B,A
+	ADD	A,L
+	LD	L,A
+	XOR	A
+MOVINV1:CP	(HL)
+	JR	NZ,MOVINV2
+	DEC	L
+	DJNZ	MOVINV1
+MOVINV2:LD	L,C
+	LD	(HL),B
 	RET
 
 MODP:	DEFB	0x20, 0x2F, 0xFC, 0xFF, 0xFF, 0xFE, 0xFF
