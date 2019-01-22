@@ -2,21 +2,20 @@
 ; Written by Daniel A. Nagy <nagydani@epointsystem.org> in 2019
 
 ; Init
-; Pollutes: AF,BC,DE,HL
-KECCAKI:LD	HL,KECCAKS
+; Pollutes: BC,DE,HL
+KECCAKI:CALL	KECCAKQ
 	LD	E,L
 	LD	D,H
 	INC	DE
 	LD	(HL),0
 	LD	BC,199
 	LDIR
-	JR	KECCAKQ
+	RET
 
 ; Update
 ; In: A next byte to hash
 ; Pollutes: AF, AF', BC, BC', DE, DE', HL, HL', IX
 KECCAKU:LD	HL,(KECCAKP)
-	LD	H,KECCAKS / 0x100
 	XOR	(HL)
 	LD	(HL),A
 	LD	A,L
@@ -25,8 +24,25 @@ KECCAKU:LD	HL,(KECCAKP)
 	LD	(KECCAKP),A
 	RET	C
 	CALL	KECCAKF
-KECCAKQ:LD	A,KECCAKS - 0x100 * (KECCAKS / 0x100)
-	LD	(KECCAKP),A
+KECCAKQ:LD	HL,KECCAKS
+	LD	(KECCAKP),HL
+	RET
+
+; Squeeze
+; Out: A next byte from PRNG
+; Pollutes: AF, AF', BC, BC', DE, DE', HL, HL', IX
+KECCAKR:LD	HL,(KECCAKP)
+	LD	A,L
+	CP	KECCAKS - 0x100 * (KECCAKS / 0x100) + 0x87
+	LD	A,(HL)
+	JR	NC,KECCAKO
+	INC	HL
+	LD	(KECCAKP),HL
+	RET
+KECCAKO:PUSH	AF
+	CALL	KECCAKF
+	CALL	KECCAKQ
+	POP	AF
 	RET
 
 ; Finalize
@@ -40,6 +56,7 @@ KECCAK:	LD	HL,(KECCAKP)
 	LD	A,(KECCAKS + 0x87)
 	XOR	0x80
 	LD	(KECCAKS + 0x87),A
+	CALL	KECCAKQ
 ; Shuffle
 KECCAKF:LD	B,24
 KECCAKL:PUSH	BC
