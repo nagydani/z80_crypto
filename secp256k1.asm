@@ -206,7 +206,7 @@ ECDOUB:	PUSH	HL	; AX
 	EXX
 	POP	HL	; ECV
 	LD	DE,ECX
-	CALL	MODMUL
+	CALL	MODMUL	; LAM = 3 * AX * AX * MODINV(2 * AY)
 	POP	HL	; AX
 	LD	D,H
 	LD	E,L
@@ -221,11 +221,11 @@ ECINT:	PUSH	HL	; AX
 	EXX
 	LD	HL,LAM
 	LD	DE,LAM
-	CALL	MODMUL
+	CALL	MODMUL	; ECX = LAM * LAM
 	POP	DE	; ECX
 	POP	HL	; BX
 	PUSH	DE	; ECX
-	CALL	MODSUB
+	CALL	MODSUB	; ECX = LAM * LAM - BX
 	POP	DE	; ECX
 	POP	HL	; AX
 	PUSH	HL	; AX
@@ -251,7 +251,7 @@ ECINT:	PUSH	HL	; AX
 ; In: DE pointer to 32-byte accumulator, HL pointer to 32-byte number to subtract
 ; Pollutes: AF, BC, E, L
 MODSUB:	LD	B,0x20
-MODSUBX:LD	C,L
+	LD	C,E
 	AND	A
 MSUBL:	LD	A,(DE)
 	SBC	A,(HL)
@@ -260,6 +260,8 @@ MSUBL:	LD	A,(DE)
 	INC	E
 	DJNZ	MSUBL
 	RET	NC
+	LD	H,D
+	LD	L,C
 ; Add P
 ; In: HL pointer to 32-byte accumulator, B = 0
 ; Out: CF set, if NO carry
@@ -417,6 +419,7 @@ MODINVR:LD	B,0x20
 MODINVH:RR	(HL)
 	DEC	L
 	DJNZ	MODINVH
+	LD	D,H
 	; UV : = UV / 2
 	LD	HL,(MODINVUV)
 	LD	A,(HL)
@@ -428,6 +431,7 @@ MODINV6:RR	(HL)
 	DJNZ	MODINV6
 	INC	L
 	BIT	0,(HL)
+	LD	H,D
 	JR	Z,MODINV5
 	DEC	L
 	JR	MODINVN

@@ -13,7 +13,34 @@ CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
 
 	ORG	63488	; 0xF800
-INIT:	LD	HL,(CH_TAB)
+; Hasher channel initialization
+	JR	INITCH
+; Ethereum address checker
+; Error codes: 0 OK, 1..40 wrong capitalization, >40 wrong format
+ETHADD:	LD	HL,(CH_ADD)
+	PUSH	HL
+	LD	HL,VARNAME
+	LD	(CH_ADD),HL
+	CALL	SCANNING
+	POP	HL
+	LD	(CH_ADD),HL
+	CALL	STK_FETCH
+	LD	A,B
+	OR	A
+	JR	NZ,ETHADDE
+	DEC	B
+	LD	A,C
+	CP	0x28
+	CALL	Z,ERC55
+ETHADDE:PUSH	BC
+	CALL	INIT2
+	POP	BC
+	EXX
+	LD	HL,0x2758
+	EXX
+	RET
+
+INITCH:	LD	HL,(CH_TAB)
 	LD	A,H
 	OR	L
 	RET	NZ	; Channel already open
@@ -84,6 +111,7 @@ INPUTE:	CALL	INIT2
 	RET
 
 	INCLUDE	"../keccak.asm"
+	INCLUDE "../erc55.asm"
 STREAM:	DEFW	WRITE
 	DEFW	READ
 	DEFB	"H"
@@ -91,6 +119,8 @@ STREAM:	DEFW	WRITE
 	DEFW	READ
 	DEFW	STREAME- STREAM
 STREAME:EQU	$
+VARNAME:DEFM	"A$"
+	DEFB	0x0D
 	INCLUDE	"../keccaktab.asm"
 KECCAKB:EQU	IOTAT+0x100
 KECCAKS:EQU	KECCAKB+48
