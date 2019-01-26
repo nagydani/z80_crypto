@@ -64,7 +64,7 @@ MADDL:	LD	A,(DE)
 MODCORR:LD	L,C
 ; Subtract P
 ; In: HL pointer to 32-byte accumulator, B = 0
-; Out: CF set, if carry
+; Out: CF set, if NO carry
 MODSUBP:LD	A,(HL)
 	ADD	A,0xD1
 	LD	(HL),A
@@ -86,6 +86,7 @@ MODSUBP:LD	A,(HL)
 	ADC	A,B
 	LD	(HL),A
 	RET	NC
+	AND	A
 	INC	L
 	LD	B,0x1B
 MINCL:	INC	(HL)
@@ -95,6 +96,157 @@ MINCL:	INC	(HL)
 	SCF
 	RET
 
+; Modular doubling
+; In: HL pointer to 32-byte number to double
+; Pollutes: AF, BC, L
+MODDOUB:LD	B,0x20
+MODDBX:	LD	C,L
+	OR	A
+MODDBL:	RL	(HL)
+	INC	L
+	DJNZ	MODDBL
+	JR	C,MODCORR
+	RET
+
+; Canonize modular number
+; In: HL pointer to END of 32-byte number to canonize
+; Pollutes: AF, BC, DE, HL
+MODCAN:	LD	B,0x1B
+	LD	A,0xFF
+MODCANL:CP	(HL)
+	RET	NZ
+	DEC	L
+	DJNZ	MODCANL
+	LD	DE,MODP+5
+	LD	B,5
+MODCANC:LD	A,(DE)
+	CP	(HL)
+	JR	C,MODCAND
+	DEC	L
+	DEC	DE
+	DJNZ	MODCANC
+	INC	L
+	JR	MODSUBP
+MODCAND:LD	A,L
+	SUB	B
+	LD	L,A
+	INC	L
+	LD	B,0
+	JR	MODSUBP
+
+; EC add
+; In: HL point A, DE point B
+ECADD:	PUSH	DE
+	PUSH	HL
+	EX	DE,HL	; HL points to B
+	LD	DE,ECX
+	LD	BC,0x40
+	LDIR	; ECX = BX, ECY = BY
+	POP	HL
+	PUSH	HL
+	LD	DE,ECX
+	CALL	MODSUB	; ECX = BX - AX
+	POP	HL
+	PUSH	HL
+	LD	BC,0x20
+	ADD	HL,BC
+	LD	DE,ECY
+	PUSH	DE
+	CALL	MODSUB	; ECY = BY - AY
+	POP	HL
+	LD	DE,ECV
+	PUSH	DE
+	CALL	MODINV	; ECV = MODINV(BX - AX)
+	LD	HL,LAM
+	EXX
+	POP	DE	; DE = MODINV(BX - AX)
+	LD	HL,ECY	; HL = BY - AY
+	CALL	MODMUL
+	POP	HL
+	POP	DE
+	JR	ECINT
+; EC doubling
+; In: HL pointer to point to double
+; Out: doubled at ECX,ECY
+ECDOUB:	PUSH	HL	; AX
+	LD	D,H
+	LD	E,L
+	EXX
+	LD	HL,ECV
+	EXX
+	CALL	MODMUL	; ECV = AX * AX
+	LD	HL,ECV
+	LD	DE,ECX
+	LD	BC,0x20
+	PUSH	BC
+	PUSH	DE	; ECX
+	PUSH	HL	; ECV
+	LDIR		; ECX = AX * AX
+	POP	HL	; ECV
+	PUSH	HL	; ECV
+	CALL	MODDOUB ; ECV = 2 * AX * AX
+	POP	DE	; ECV
+	POP	HL	; ECX
+	CALL	MODADD	; ECX = 3 * AX * AX
+	POP	BC	; 0x20
+	POP	HL	; AX
+	PUSH	HL	; AX
+	ADD	HL,BC	; AY
+	LD	DE,ECY
+	PUSH	DE	; ECY
+	LDIR		; ECY = AY
+	POP	HL	; ECY
+	PUSH	HL	; ECY
+	CALL	MODDOUB	; ECY = 2 * AY
+	POP	HL	; ECY
+	LD	DE, ECV
+	PUSH	DE	; ECV
+	CALL	MODINV	; ECV = MODINV(2 * AY)
+	LD	HL,LAM
+	EXX
+	POP	HL	; ECV
+	LD	DE,ECX
+	CALL	MODMUL
+	POP	HL	; AX
+	LD	D,H
+	LD	E,L
+; EC intersection
+; In: HL pointer to A, DE pointer to B, slope in LAM
+; Out: intersection pointed by ECX
+ECINT:	PUSH	HL	; AX
+	PUSH	DE	; BX
+	EXX
+	LD	HL,ECX
+	PUSH	HL	; ECX
+	EXX
+	LD	HL,LAM
+	LD	DE,LAM
+	CALL	MODMUL
+	POP	DE	; ECX
+	POP	HL	; BX
+	PUSH	DE	; ECX
+	CALL	MODSUB
+	POP	DE	; ECX
+	POP	HL	; AX
+	PUSH	HL	; AX
+	CALL	MODSUB	; ECX = (LAM * LAM - BX - AX)
+	LD	HL,ECY
+	EXX
+	POP	HL	; AX
+	LD	DE,ECV
+	LD	BC,0x20
+	LDIR		; ECV = AX
+	PUSH	HL	; AY
+	LD	HL,ECX
+	LD	DE,ECV
+	PUSH	DE	; ECV
+	CALL	MODSUB	; ECV = AX - ECX
+	POP	DE	; ECV
+	LD	HL,LAM
+	CALL	MODMUL	; ECY = LAM * (AX - ECX)
+	LD	DE,ECY
+	POP	HL	; AY
+	; ECY = LAM * (AX - ECX) - AY
 ; Modular subtraction/accumulation
 ; In: DE pointer to 32-byte accumulator, HL pointer to 32-byte number to subtract
 ; Pollutes: AF, BC, E, L
@@ -132,6 +284,7 @@ MODADDP:LD	A,(HL)
 	SBC	A,B
 	LD	(HL),A
 	RET	NC
+	AND	A
 	INC	L
 	LD	B,0x1B
 MDECL:	DEC	(HL)
@@ -139,17 +292,6 @@ MDECL:	DEC	(HL)
 	INC	L
 	DJNZ	MDECL
 	SCF
-	RET
-; Modular doubling
-; In: HL pointer to 32-byte number to double
-; Pollutes: AF, BC, L
-MODDOUB:LD	B,0x20
-MODDBX:	LD	C,L
-	OR	A
-MODDBL:	RL	(HL)
-	INC	L
-	DJNZ	MODDBL
-	JR	C,MODCORR
 	RET
 
 ; Modular inverse
@@ -170,15 +312,16 @@ MODINV:	LD	(MODINVA),DE
 	; If X is even, U := X + P
 	CALL	Z,MODADDP
 	JR	C,MODINV0
-	INC	(HL)
 	LD	L,MODINVU - 0x100 * (MODINVU / 0x100)
-	CALL	MODINVN
+	INC	(HL)
+	LD	L,MODINVU - 0x100 * (MODINVU / 0x100) + 0x21
+	INC	(HL)
 	; A := 0
 MODINV0:LD	HL,(MODINVA)
 	LD	E,L
 	LD	D,H
 	INC	E
-	LD	C,0x1F
+	LD	BC,0x1F
 	LD	(HL),B
 	LDIR
 	; V := P
@@ -314,12 +457,13 @@ MODINVN:LD	A,(HL)
 	ADD	A,L
 	LD	L,A
 	XOR	A
-MOVINV1:CP	(HL)
-	JR	NZ,MOVINV2
+MODINV1:CP	(HL)
+	JR	NZ,MODINV2
 	DEC	L
-	DJNZ	MOVINV1
-MOVINV2:LD	L,C
+	DJNZ	MODINV1
+MODINV2:LD	L,C
 	LD	(HL),B
 	RET
 
 MODP:	DEFB	0x20, 0x2F, 0xFC, 0xFF, 0xFF, 0xFE, 0xFF
+
