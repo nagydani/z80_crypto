@@ -72,7 +72,7 @@ ADDMID:	LD	A,(EXPECT+1)
 
 	INCLUDE "bigmul.asm"
 	INCLUDE "mul8bit.asm"
-	INCLUDD "multab.asm"
+	INCLUDE "multab.asm"
 XVALUE:	DEFS	2
 YVALUE:	DEFS	2
 EXPECT:	DEFS	4

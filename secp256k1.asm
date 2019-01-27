@@ -285,11 +285,13 @@ MODADDP:LD	A,(HL)
 	SBC	A,B
 	LD	(HL),A
 	RET	NC
+	LD	A,0xFF
 	AND	A
 	INC	L
 	LD	B,0x1B
 MDECL:	DEC	(HL)
-	RET	P
+	CP	(HL)	; There must be a better way...
+	RET	NZ
 	INC	L
 	DJNZ	MDECL
 	SCF
