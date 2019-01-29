@@ -12,14 +12,73 @@ PROG:		EQU	0x5C53
 CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
 
-	ORG	63488	; 0xF800
+	ORG	60000
 ; Hasher channel initialization
-	JR	INITCH
+	JP	INITCH
+; Ethereum address capitalization in a$
+	JP	ETHADD
+; Public key derivation from private key in k$
+PUBKEY:	LD	HL,(CH_ADD)
+	PUSH	HL
+	LD	HL,VARKEY
+	LD	(CH_ADD),HL
+	CALL	SCANNING
+	POP	HL
+	LD	(CH_ADD),HL
+	CALL	STK_FETCH
+	LD	A,B
+	OR	A
+	RET	NZ
+	LD	B,0x40
+	LD	A,C
+	CP	B
+	RET	NZ
+	LD	HL,PRIVK + 0x1F
+PRIVKL:	LD	A,(DE)
+	INC	DE
+	CALL	HEXDD
+	RET	NC
+	RLD
+	BIT	0,B
+	JR	Z,HEXB
+	DEC	HL
+HEXB:	DJNZ	PRIVKL
+	LD	HL,ECGX
+	LD	DE,PRIVK + 0x1F
+	CALL	ECMUL
+	LD	HL,ECB
+	CALL	MODCAN
+	LD	HL,ECB + 0x20
+	CALL	MODCAN
+	CALL	KECCAKI
+	LD	HL,ECB+0x1F
+	LD	DE,KECCAKS
+	CALL	HASHKC
+	LD	L,ECB - 0x100 * (ECB/ 0x100) + 0x3F
+	CALL	HASHKC
+	LD	(KECCAKP),DE
+	CALL	KECCAK
+	LD	HL,KECCAKS + 0xC
+	LD	(KECCAKP),HL
+	SET	5,(IY+FLAGS2-ERR_NR)
+	LD      HL,0x2758
+	EXX
+	LD	BC,0
+	RET
+
+HASHKC:	LD	B,0x20
+HASHKL:	LD	A,(HL)
+	DEC	L
+	LD	(DE),A
+	INC	E
+	DJNZ	HASHKL
+	RET
+
 ; Ethereum address checker
 ; Error codes: 0 OK, 1..40 wrong capitalization, >40 wrong format
 ETHADD:	LD	HL,(CH_ADD)
 	PUSH	HL
-	LD	HL,VARNAME
+	LD	HL,VARADD
 	LD	(CH_ADD),HL
 	CALL	SCANNING
 	POP	HL
@@ -97,6 +156,10 @@ INPUT:	LD	HL,6
 	RRCA
 	RRCA
 	CALL	Z,KECCAKR
+; Encode hexadecimal digit
+; In: A binary digit in the 0..F range
+; Out: A ascii digit, capitalized
+; Pollutes: F
 HEXD:	AND	0xF
 	ADD	A,0x90
 	DAA
@@ -104,14 +167,36 @@ HEXD:	AND	0xF
 	DAA
 	SCF
 	RET
+
 INPUTE:	CALL	INIT2
 	RES	3,(IY+TV_FLAG-ERR_NR)	; Work around another bug in INPUT
 	LD	A,0xD
 	SCF
 	RET
 
+; Decode hexadecimal digit
+; In: A ascii digit
+; Out: A binary digit, CF set, if no error
+HEXDD:	SUB	"0"
+	CCF
+	RET	NC
+	CP	0xA
+	RET	C
+	SUB	"A" - "0"
+	CCF
+	RET	NC
+	AND	0xDF
+	ADD	0xA
+	CP	0x10
+	RET
+
 	INCLUDE	"../keccak.asm"
 	INCLUDE "../erc55.asm"
+	INCLUDE	"../secp256k1.asm"
+	INCLUDE "../bigmul.asm"
+	INCLUDE "../mul8bit.asm"
+	INCLUDE "../multab.asm"
+	INCLUDE	"../secp256k1tab.asm"
 STREAM:	DEFW	WRITE
 	DEFW	READ
 	DEFB	"H"
@@ -119,10 +204,24 @@ STREAM:	DEFW	WRITE
 	DEFW	READ
 	DEFW	STREAME- STREAM
 STREAME:EQU	$
-VARNAME:DEFM	"A$"
+VARADD:	DEFM	"A$"
+	DEFB	0x0D
+VARKEY:	DEFM	"K$"
 	DEFB	0x0D
 	INCLUDE	"../keccaktab.asm"
-KECCAKB:EQU	IOTAT+0x100
-KECCAKS:EQU	KECCAKB+48
-KECCAKP:EQU	KECCAKS+200
+KECCAKB:EQU	IOTAT + 0x100
+KECCAKS:EQU	KECCAKB + 48
+KECCAKP:EQU	KECCAKS + 200
 
+MODINVU:EQU	KECCAKB + 0x100
+MODINVV:EQU	MODINVU + 0x22
+MODINVD:EQU	MODINVV + 0x22
+MODINVA:EQU	MODINVD + 0x20
+MODINVUV:EQU	MODINVA + 0x2
+ECB:	EQU	MODINVUV + 0x2
+PRIVK:	EQU	ECB + 0x40
+ECX:	EQU	MODINVU + 0x100
+ECY:	EQU	ECX + 0x20
+ECV:	EQU	ECY + 0x20
+LAM:	EQU	ECX + 0x100
+ECW:	EQU	LAM + 0x20
