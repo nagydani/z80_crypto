@@ -330,7 +330,7 @@ MODINV0:LD	HL,(MODINVA)
 	LD	(HL),B
 	LDIR
 	; V := P
-S2MODPL: EQU	$1 + 1
+S2MODPL: EQU	$ + 1
 	LD	HL,MODPL
 	LD	DE,MODINVV
 	LD	C,(HL)
@@ -609,7 +609,9 @@ MSUBQ1:	LD	A,(DE)
 ; Add Q
 ; In: HL pointer to 32-byte accumulator, B = 0
 ; Out: CF set, if NO carry
+; Pollutes: AF, B, DE, L
 MODADDQ:EX	DE,HL
+	LD	HL,MOD1Q
 	LD	B,0x11
 	AND	A
 MADDQ1:	LD	A,(DE)

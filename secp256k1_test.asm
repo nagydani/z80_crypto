@@ -5,6 +5,7 @@ START:	JP	TMODMUL
 	JP	TECADD
 	JP	TECMUL
 	JP	TMQMUL
+	JP	TMQINV
 ; Tests 256 bit modular multiplication
 ; In: XVALUE, YVALUE: little-endian 256 bit multiplicands, EXPECT: little-endian 256 bit expected product
 ; Out: B = 0 if test passed, length of erroneous prefix (LSB) otherwise
@@ -13,10 +14,10 @@ TMODMUL:LD	HL,LAM
 	PUSH	HL
 	LD	HL,XVALUE
 	LD	DE,YVALUE
-	CALL	MODMUL
+TMMC:	CALL	MODMUL
 	LD	HL,LAM + 0x1F
 	CALL	MODCAN
-	EXX
+CHECKS:	EXX
 	POP	HL
 	EXX
 	LD	DE,EXPECT + 0x20
@@ -36,21 +37,22 @@ TMQMUL:	LD	HL,LAM
 	PUSH	HL
 	LD	HL,XVALUE
 	LD	DE,ZVALUE
-	CALL	MODQMUL
+TMQMC:	CALL	MODQMUL
 	LD	HL,LAM + 0x1F
 	CALL	MODQCAN
+	JR	CHECKS
+; Tests 256 bit modular inverse
+; In: XVALUE: value to invert
+; Out: BC = 0 if test passed
+TMQINV:	LD	HL,XVALUE
+	LD	DE,ECV
+	CALL	MODQINV
+	LD	HL,LAM
 	EXX
-	POP	HL
-	EXX
-	LD	DE,EXPECT + 0x20
-	LD	BC,0x2000
-CHECKMQ:DEC	DE
-	DEC	HL
-	LD	A,(DE)
-	CP	(HL)
-	RET	NZ
-	DJNZ	CHECKMQ
-	RET
+	PUSH	HL
+	LD	HL,XVALUE
+	LD	DE,ECV
+	JR	TMQMC
 ; Tests 256 bit modular inverse
 ; In: XVALUE: value to invert
 ; Out: BC = 0 if test passed
@@ -62,28 +64,7 @@ TMODINV:LD	HL,XVALUE
 	PUSH	HL
 	LD	HL,XVALUE
 	LD	DE,ECV
-	CALL	MODMUL
-	EXX
-	POP	HL
-	EXX
-	DEC	HL
-	LD	A,(HL)
-	INC	A
-	JR	NZ,CHECKL
-	LD	HL,LAM
-	CALL	MODSUBP
-	DEC	HL
-CHECKL:	LD	BC,0x1F00
-CHECKI:	LD	A,(HL)
-	DEC	HL
-	CP	C
-	RET	NZ
-	DJNZ	CHECKI
-	INC	C
-	DEC	(HL)
-	RET	NZ
-	DEC	C
-	RET
+	JR	TMMC
 ; Tests doubling of generator point on EC
 TECDOUB:EXX
 	PUSH	HL
