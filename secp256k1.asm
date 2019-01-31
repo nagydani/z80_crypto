@@ -122,6 +122,7 @@ MODCANL:CP	(HL)
 MODCANC:LD	A,(DE)
 	CP	(HL)
 	JR	C,MODCAND
+	RET	NZ
 	DEC	L
 	DEC	DE
 	DJNZ	MODCANC
@@ -313,6 +314,7 @@ MODINV:	LD	(MODINVA),DE
 	SCF
 	BIT	0,(HL)
 	; If X is even, U := X + P
+S1MODADDP: EQU	$ +1
 	CALL	Z,MODADDP
 	JR	C,MODINV0
 	LD	L,MODINVU - 0x100 * (MODINVU / 0x100)
@@ -328,14 +330,16 @@ MODINV0:LD	HL,(MODINVA)
 	LD	(HL),B
 	LDIR
 	; V := P
-	LD	HL,MODP
+S2MODPL: EQU	$1 + 1
+	LD	HL,MODPL
 	LD	DE,MODINVV
-	LD	C,7
+	LD	C,(HL)
+	INC	HL
 	LDIR
+	LD	C,(HL)
 	LD	L,E
 	LD	H,D
-	DEC	L
-	LD	C,0x1A
+	DEC	HL
 	LDIR
 	EX	DE,HL
 	LD	(HL),C
@@ -386,6 +390,7 @@ MODINVW:LD	E,MODINVU - 0x100 * (MODINVU / 0x100)
 	; D := (D + A) mod P
 	LD	L, MODINVD - 0x100 * (MODINVD / 0x100)
 	LD	DE,(MODINVA)
+S3MODADD: EQU	$ + 1
 	CALL	MODADD
 	; If D is odd, D := D + P
 	CALL	MODINV5
@@ -398,6 +403,7 @@ MODINVS:LD	DE,MODINVV
 	; A := (A + D) mod P
 	LD	HL,(MODINVA)
 	LD	DE,MODINVD
+S4MODADD: EQU	$ + 1
 	CALL	MODADD
 	; If A is odd, A := A + P
 	CALL	MODINV5
@@ -410,6 +416,7 @@ MODINV5:LD	L,C
 	BIT	0,(HL)
 	SCF
 	LD	B,0
+S5MODADDP: EQU	$ + 1
 	CALL	NZ,MODADDP
 	CCF
 	EX	AF,AF'	; save carry
@@ -471,8 +478,6 @@ MODINV2:LD	L,C
 	LD	(HL),B
 	RET
 
-MODP:	DEFB	0x20, 0x2F, 0xFC, 0xFF, 0xFF, 0xFE, 0xFF
-
 ; EC point multiplication
 ; In: HL - EC point to multiply, DE - last (most significant) byte of index
 ECMUL:	PUSH	DE
@@ -522,4 +527,214 @@ ECMULC:	LD	HL,ECX
 	LD	DE,ECB
 	LD	BC,0x40
 	LDIR
+	RET
+
+; FP order P
+MODPL:	DEFB	0x7
+MODP:	DEFB	0x20
+	DEFB	0x2F, 0xFC, 0xFF, 0xFF
+	DEFB	0xFE, 0xFF ; ...
+MODP1L:	DEFB	0x1A
+
+; Modulo Q arithmetics can be slower than modulo P arithmetics
+
+; EC order Q
+MODQL:	DEFB	0x13
+MODQ:	DEFB	0x20
+	DEFB	0x41, 0x41, 0x34, 0xD0
+	DEFB	0x8C, 0x5E, 0xD2, 0xBF
+	DEFB	0x3B, 0xA0, 0x48, 0xAF
+	DEFB	0xE6, 0xDC, 0xAE, 0xBA
+	DEFB	0xFE, 0xFF ; ...
+MODQ1L:	DEFB	0x0E
+
+; Canonize modular number
+; In: HL pointer to END of 32-byte number to canonize
+; Pollutes: AF, BC, DE, HL
+MODQCAN:LD	B,0x0F
+	LD	A,0xFF
+MODQCL:	CP	(HL)
+	RET	NZ
+	DEC	L
+	DJNZ	MODQCL
+	LD	DE,MODQ+0x11
+	LD	B,0x11
+MODQCC:	LD	A,(DE)
+	CP	(HL)
+	JR	C,MODQCA
+	RET	NZ
+	DEC	L
+	DEC	DE
+	DJNZ	MODQCC
+	INC	L
+	JR	MODSUBQ
+MODQCA:	LD	A,L
+	SUB	B
+	LD	L,A
+	INC	L
+	LD	B,0
+	JR	MODSUBQ
+
+
+; Modular addition/accumulation
+; In: HL pointer to 32-byte accumulator, DE pointer to 32-byte number to add
+; Pollutes: AF, BC, DE, L
+MODQADD:LD	B,0x20
+	LD	C,L
+	AND	A
+MQADDL:	LD	A,(DE)
+	ADC	A,(HL)
+	LD	(HL),A
+	INC	L
+	INC	E
+	DJNZ	MQADDL
+	RET	NC
+	LD	L,C
+; Subtract Q
+; In: HL pointer to 32-byte accumulator, B = 0
+; Out: CF set, if NO carry
+MODSUBQ:LD	DE,MOD1Q
+	LD	B,0x11
+	AND	A
+MSUBQ1:	LD	A,(DE)
+	ADC	A,(HL)
+	LD	(HL),A
+	INC	L
+	INC	E
+	DJNZ	MSUBQ1
+	RET	NC
+	LD	B,0x0F
+	JP	MINCL
+
+; Add Q
+; In: HL pointer to 32-byte accumulator, B = 0
+; Out: CF set, if NO carry
+MODADDQ:EX	DE,HL
+	LD	B,0x11
+	AND	A
+MADDQ1:	LD	A,(DE)
+	SBC	A,(HL)
+	LD	(DE),A
+	INC	L
+	INC	E
+	DJNZ	MADDQ1
+	EX	DE,HL
+	RET	NC
+	LD	A,0xFF
+	LD	B,0x0F
+	JP	MDECL
+
+; Modular inverse
+; In: HL pointer to 32-byte number to invert (X) , DE pointer to result
+MODQINV:LD	BC,MODADDQ
+	LD	(S1MODADDP),BC
+	LD	(S5MODADDP),BC
+	LD	BC,MODQL
+	LD	(S2MODPL),BC
+	LD	BC,MODQADD
+	LD	(S3MODADD),BC
+	LD	(S4MODADD),BC
+	CALL	MODINV
+	LD	HL,MODADDP
+	LD	(S1MODADDP),HL
+	LD	(S5MODADDP),HL
+	LD	HL,MODPL
+	LD	(S2MODPL),HL
+	LD	HL,MODADD
+	LD	(S3MODADD),HL
+	LD	(S4MODADD),HL
+	RET
+
+; Modular multiplication
+MODQMUL:LD	B,0x20
+	CALL	BIGMUL
+	EXX
+	LD	A,L
+	EXX
+	SUB	0x20
+	LD	L,A
+	EXX
+	LD	A,H
+	EXX
+	LD	H,A
+	LD	DE,MOD1Q
+	LD	B,0x10
+	CALL	BIGMUL
+	PUSH	HL
+	LD	A,L
+	ADD	A,B
+	LD	L,A
+	CALL	BIGMUL
+	LD	A,L
+	ADD	A,B
+	ADD	A,B
+	LD	L,A
+	ADD	A,B
+	LD	E,A
+	LD	D,H
+	CALL	MODQS
+	EX	DE,HL
+	PUSH	DE
+	LD	BC,0x10
+	LDIR
+	POP	HL
+	JR	NC,MODQAC
+	LD	B,0x10
+MODQAI:	INC	(HL)
+	JR	NZ,MODQAC
+	INC	L
+	DJNZ	MODQAI
+MODQAC:	POP	DE
+	LD	A,E
+	ADD	A,0x30
+	LD	L,A
+	LD	B,0x20
+	CALL	MODQS
+	PUSH	AF
+	PUSH	HL
+	EXX
+	POP	HL
+	LD	B,0x10
+	LD	A,L
+	SUB	B
+	LD	L,A
+	LD	DE,MOD1Q
+	CALL	BIGMUL
+	POP	AF
+	EXX
+	JR	NC,MODQNC
+	LD	B,0x10
+	LD	A,L
+	SUB	B
+	LD	L,A
+	LD	DE,MOD1Q
+	CALL	MODQS
+MODQNC:	LD	B,0x10
+	LD	A,L
+	SUB	B
+	LD	L,A
+	SUB	B
+	SUB	B
+	LD	E,A
+	CALL	MODQS
+	LD	B,0x20
+	LD	A,L
+	SUB	B
+	LD	E,A
+	SUB	A,0x70
+	LD	L,A
+	CALL	MODQS
+	LD	B,0x20
+	LD	A,L
+	SUB	B
+	LD	L,A
+	ADD	A,B
+	ADD	A,B
+	LD	E,A
+MODQS:	LD	A,(DE)
+	ADC	A,(HL)
+	LD	(HL),A
+	INC	E
+	INC	L
+	DJNZ	MODQS
 	RET

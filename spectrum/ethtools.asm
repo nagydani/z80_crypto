@@ -1,3 +1,5 @@
+PRINT_OUT:	EQU	0x09F4
+CHAN_OPEN:	EQU	0x1601
 MAKE_ROOM:	EQU	0x1655
 STR_DATA1:	EQU	0x1727
 SCANNING:	EQU	0x24FB
@@ -8,6 +10,7 @@ CH_TAB:		EQU	0x5C34
 ERR_NR:		EQU	0x5C3A
 TV_FLAG:	EQU	0x5C3C
 CHANS:		EQU	0x5C4F
+CURCHL:		EQU	0x5C51
 PROG:		EQU	0x5C53
 CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
@@ -17,6 +20,19 @@ FLAGS2:		EQU	0x5C6A
 	JP	INITCH
 ; Ethereum address capitalization in a$
 	JP	ETHADD
+; Public key derivation from private key in k$
+	JP	PUBKEY
+; Passphrase input hidden by stars
+HIDEPW:	LD	A,1
+	CALL	CHAN_OPEN
+	LD	HL,(CURCHL)
+	LD	(HL),PWOUT-0x100*(PWOUT/0x100)
+	INC	HL
+	LD	(HL),PWOUT/0x100
+	RET
+PWOUT:	LD	A,"*"
+	JP	PRINT_OUT
+
 ; Public key derivation from private key in k$
 PUBKEY:	LD	HL,(CH_ADD)
 	PUSH	HL

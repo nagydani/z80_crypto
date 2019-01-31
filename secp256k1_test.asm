@@ -4,6 +4,7 @@ START:	JP	TMODMUL
 	JP	TECDOUB
 	JP	TECADD
 	JP	TECMUL
+	JP	TMQMUL
 ; Tests 256 bit modular multiplication
 ; In: XVALUE, YVALUE: little-endian 256 bit multiplicands, EXPECT: little-endian 256 bit expected product
 ; Out: B = 0 if test passed, length of erroneous prefix (LSB) otherwise
@@ -26,6 +27,29 @@ CHECK:	DEC	DE
 	CP	(HL)
 	RET	NZ
 	DJNZ	CHECK
+	RET
+; Tests 256 bit modular multiplication
+; In: XVALUE, ZVALUE: little-endian 256 bit multiplicands, EXPECT: little-endian 256 bit expected product
+; Out: B = 0 if test passed, length of erroneous prefix (LSB) otherwise
+TMQMUL:	LD	HL,LAM
+	EXX
+	PUSH	HL
+	LD	HL,XVALUE
+	LD	DE,ZVALUE
+	CALL	MODQMUL
+	LD	HL,LAM + 0x1F
+	CALL	MODQCAN
+	EXX
+	POP	HL
+	EXX
+	LD	DE,EXPECT + 0x20
+	LD	BC,0x2000
+CHECKMQ:DEC	DE
+	DEC	HL
+	LD	A,(DE)
+	CP	(HL)
+	RET	NZ
+	DJNZ	CHECKMQ
 	RET
 ; Tests 256 bit modular inverse
 ; In: XVALUE: value to invert
@@ -152,7 +176,16 @@ YVALUE:	DEFB	0xA6, 0xA6, 0x67, 0x97
 	DEFB	0x31, 0x4D, 0xD7, 0x4E
 	DEFB	0x06, 0x1A, 0xE3, 0xB7
 
-EXPECT:	DEFB	0x14, 0x00, 0x00, 0x00
+ZVALUE:	DEFB	0x2E, 0x65, 0x9E, 0xAA
+	DEFB	0xF6, 0xCB, 0xE5, 0x51
+	DEFB	0x51, 0x36, 0x17, 0x07
+	DEFB	0xF5, 0x41, 0x54, 0xF2
+	DEFB	0xBD, 0xCF, 0xA3, 0x0C
+	DEFB	0xFF, 0xCC, 0x39, 0xA0
+	DEFB	0x5C, 0x80, 0x95, 0xC3
+	DEFB	0x2E, 0xF5, 0x0A, 0x0F
+
+EXPECT:	DEFB	0x01, 0x00, 0x00, 0x00
 	DEFB	0x00, 0x00, 0x00, 0x00
 	DEFB	0x00, 0x00, 0x00, 0x00
 	DEFB	0x00, 0x00, 0x00, 0x00
