@@ -362,7 +362,9 @@ MODINVL:LD	HL,MODINVV
 	JR	NZ,MODINVC
 	RET
 	; while U > V
-MODINVC:LD	DE,MODINVU
+MODINVC:LD	HL,MODINVU
+	CALL	MODINVN
+	EX	DE,HL
 	LD	A,(DE)
 	LD	HL,MODINVV
 	LD	B,(HL)
@@ -478,6 +480,9 @@ MODINV2:LD	L,C
 	LD	(HL),B
 	RET
 
+; EC generator point multiplication
+ECGMUL:	LD	HL,ECGX
+; In: HL - EC point to multiply, DE - last (most significant) byte of index
 ; EC point multiplication
 ; In: HL - EC point to multiply, DE - last (most significant) byte of index
 ECMUL:	PUSH	DE
@@ -541,7 +546,7 @@ MODP1L:	DEFB	0x1A
 ; EC order Q
 MODQL:	DEFB	0x13
 MODQ:	DEFB	0x20
-	DEFB	0x41, 0x41, 0x34, 0xD0
+	DEFB	0x41, 0x41, 0x36, 0xD0
 	DEFB	0x8C, 0x5E, 0xD2, 0xBF
 	DEFB	0x3B, 0xA0, 0x48, 0xAF
 	DEFB	0xE6, 0xDC, 0xAE, 0xBA
@@ -661,12 +666,12 @@ MODQMUL:LD	B,0x20
 	LD	H,A
 	LD	DE,MOD1Q
 	LD	B,0x10
-	CALL	BIGMUL
+	CALL	BIGMUL		; m = hl * el
 	PUSH	HL
 	LD	A,L
 	ADD	A,B
 	LD	L,A
-	CALL	BIGMUL
+	CALL	BIGMUL		; mhh = hh * el
 	LD	A,L
 	ADD	A,B
 	ADD	A,B
@@ -686,12 +691,12 @@ MODQAI:	INC	(HL)
 	JR	NZ,MODQAC
 	INC	L
 	DJNZ	MODQAI
-MODQAC:	POP	DE
+MODQAC:	POP	DE		; m = h * el
 	LD	A,E
 	ADD	A,0x30
 	LD	L,A
 	LD	B,0x20
-	CALL	MODQS
+	CALL	MODQS		; m = h * e
 	PUSH	AF
 	PUSH	HL
 	EXX
@@ -701,7 +706,7 @@ MODQAC:	POP	DE
 	SUB	B
 	LD	L,A
 	LD	DE,MOD1Q
-	CALL	BIGMUL
+	CALL	BIGMUL		; mm = mh * el
 	POP	AF
 	EXX
 	JR	NC,MODQNC
@@ -726,6 +731,7 @@ MODQNC:	LD	B,0x10
 	SUB	A,0x70
 	LD	L,A
 	CALL	MODQS
+	EX	AF,AF'	; save carry
 	LD	B,0x20
 	LD	A,L
 	SUB	B
@@ -733,6 +739,21 @@ MODQNC:	LD	B,0x10
 	ADD	A,B
 	ADD	A,B
 	LD	E,A
+	EX	AF,AF'
+	JR	NC,MQSNC
+	PUSH	DE
+	LD	B,0
+	LD	C,L
+	CALL	MODSUBQ
+	LD	L,C
+	LD	B,0x20
+	POP	DE
+MQSNC:	CALL	MODQS
+	RET	NC
+	LD	A,L
+	SUB	0x20
+	LD	L,A
+	JP	MODSUBQ
 MODQS:	LD	A,(DE)
 	ADC	A,(HL)
 	LD	(HL),A
