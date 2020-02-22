@@ -481,7 +481,55 @@ MODINV2:LD	L,C
 	RET
 
 ; EC generator point multiplication
-ECGMUL:	LD	HL,ECGX
+ECGMUL:	LD	HL,G255X
+	LD	BC,0x0080
+ECGMULL:LD	A,(DE)
+	AND	C
+	JR	NZ,ECGMULS
+	RRC	C
+	JR	NC,ECGMULB
+	DEC	DE
+ECGMULB:LD	A,L
+	SUB	0x40
+	LD	L,A
+	SBC	A,A
+	ADD	A,H
+	LD	H,A
+	DJNZ	ECGMULL
+	RET
+
+ECGMULS:PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	DE,ECB
+	LD	BC,0x40
+	LDIR
+	JR	ECGMULC
+
+ECGMULX:LD	A,L
+	SUB	0x40
+	LD	L,A
+	SBC	A,A
+	ADD	A,H
+	LD	H,A
+	RRC	C
+	JR	NC,ECGMULW
+	DEC	DE
+ECGMULW:LD	A,(DE)
+	AND	C
+	JR	Z,ECGMULZ
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	DE,ECB
+	CALL	ECADD
+	CALL	ECMULC
+ECGMULC:POP	HL
+	POP	DE
+	POP	BC
+ECGMULZ:DJNZ	ECGMULX
+	RET
+
 ; In: HL - EC point to multiply, DE - last (most significant) byte of index
 ; EC point multiplication
 ; In: HL - EC point to multiply, DE - last (most significant) byte of index

@@ -1,11 +1,12 @@
 	ORG	0x8000
-START:	JP	TMODMUL
-	JP	TMODINV
-	JP	TECDOUB
-	JP	TECADD
-	JP	TECMUL
-	JP	TMQMUL
-	JP	TMQINV
+START:	JP	TMODMUL		; 32768
+	JP	TMODINV		; 32771
+	JP	TECDOUB		; 32774
+	JP	TECADD		; 32777
+	JP	TECMUL		; 32780
+	JP	TMQMUL		; 32783
+	JP	TMQINV		; 32786
+	JP	TECGMUL		; 32789
 ; Tests 256 bit modular multiplication
 ; In: XVALUE, YVALUE: little-endian 256 bit multiplicands, EXPECT: little-endian 256 bit expected product
 ; Out: B = 0 if test passed, length of erroneous prefix (LSB) otherwise
@@ -68,19 +69,26 @@ TMODINV:LD	HL,XVALUE
 ; Tests doubling of generator point on EC
 TECDOUB:EXX
 	PUSH	HL
-	LD	HL,ECGX
+	LD	B,255
+	LD	HL,G0X
+TECDBL:	PUSH	BC
+	PUSH	HL
 	CALL	ECDOUB
 	POP	HL
+	LD	DE,0x0040
+	ADD	HL,DE
+	PUSH	HL
+	EX	DE,HL
+	CALL	CHECKP
+	POP	HL
+	POP	BC
+	JR	NZ,TECDBF
+	DJNZ	TECDBL
+	LD	C,B
+TECDBF:	POP	HL
+	PUSH	BC
 	EXX
-	LD	DE,ECG2X
-CHECKP:	LD	HL,ECX
-	LD	BC,0x4000
-CHECKD:	LD	A,(DE)
-	CP	(HL)
-	RET	NZ
-	INC	DE
-	INC	HL
-	DJNZ	CHECKD
+	POP	BC
 	RET
 ; Tests point addition
 TECADD:	EXX
@@ -91,14 +99,22 @@ TECADD:	EXX
 	POP	HL
 	EXX
 	LD	DE,ECG3X
-	JR	CHECKP
+CHECKP:	LD	HL,ECX
+	LD	BC,0x4000
+CHECKD:	LD	A,(DE)
+	CP	(HL)
+	RET	NZ
+	INC	DE
+	INC	HL
+	DJNZ	CHECKD
+	RET
 ; Tests point multiplication
 TECMUL:	EXX
 	PUSH	HL
 	LD	HL,ECGX
 	LD	DE,PRIVK + 0x1F
 	CALL	ECMUL
-	POP	HL
+CHECKEC:POP	HL
 	EXX
 	LD	DE,ECGX
 	LD	HL,ECB
@@ -118,6 +134,12 @@ CHECKQ:	LD	A,(HL)
 	INC	HL
 	DJNZ	CHECKQ
 	RET
+; Tests generator point multiplication
+TECGMUL:EXX
+	PUSH	HL
+	LD	DE,PRIVK + 0x1F
+	CALL	ECGMUL
+	JR	CHECKEC
 
 	INCLUDE	"secp256k1.asm"
 	INCLUDE "bigmul.asm"
@@ -218,4 +240,3 @@ PRIVK:	DEFB	0x40, 0x41, 0x36, 0xD0
 	DEFB	0xFF, 0xFF, 0xFF, 0xFF
 	DEFB	0xFF, 0xFF, 0xFF, 0xFF
 	DEFB	0xFF, 0xFF, 0xFF, 0xFF
-
