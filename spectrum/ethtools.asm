@@ -15,7 +15,10 @@ PROG:		EQU	0x5C53
 CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
 
-	ORG	60000
+	ORG	43520	; 0xAA00
+	INCLUDE	"../secp256k1tab.asm"
+
+	DEFS	60000 - $
 ; Hasher channel initialization
 	JP	INITCH
 ; Ethereum address capitalization in a$
@@ -232,7 +235,6 @@ HEXDD:	SUB	"0"
 	INCLUDE	"../ecdsa.asm"
 	INCLUDE "../mul8bit.asm"
 	INCLUDE "../multab.asm"
-	INCLUDE	"../secp256k1tab.asm"
 STREAM:	DEFW	WRITE
 	DEFW	READ
 	DEFB	"H"
