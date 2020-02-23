@@ -22,7 +22,7 @@ FLAGS2:		EQU	0x5C6A
 ; Floatingpoint decoding of a
 	JP	FPDEC
 ; Hexadecimal decoding of a$
-	JP	HEXDEC
+	JP	STRDEC
 ; Hasher channel initialization
 	JP	INITCH
 ; Ethereum address capitalization in a$

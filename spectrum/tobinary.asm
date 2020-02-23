@@ -4,6 +4,7 @@ STACK_NUM:	EQU	$33B4
 RESTACK:	EQU	$3297
 K_CUR:		EQU	$5C5B
 CHAN_FLAG:	EQU	$1615
+ONE_SPACE:	EQU	$1652
 REPORT_2:	EQU	$1C2E
 REPORT_A:	EQU	$34E7
 
@@ -114,7 +115,7 @@ RET_STR:CALL	STK_STO
 	PUSH	DE		; placeholder
 	JP	(HL)		; return to RE_ENTRY
 
-HEXDEC:	LD	BC,1
+STRDEC:	LD	BC,1
 	RST	$30
 	LD	(K_CUR),HL
 	PUSH	HL
@@ -123,7 +124,23 @@ HEXDEC:	LD	BC,1
 	LD	A,$FF
 	CALL	CHAN_OPEN
 	CALL	VAR_FETCH
-	XOR	A
+	OR	C
+	JR	Z,FPEND		; empty input -- empty output
+	LD	A,(DE)
+	CP	"0"
+	JR	NZ,DECDEC
+	DEC	BC
+	INC	DE
+	LD	A,B
+	OR	C
+	JR	Z,FPEND		; just zero
+	LD	A,(DE)
+	CP	"x"
+	JR	NZ,DECDEC
+	DEC	BC
+	INC	DE
+
+HEXDEC:	XOR	A
 	BIT	0,C
 	JR	NZ,HEXDEC1
 HEXDECL:LD	A,B
@@ -148,3 +165,69 @@ HEXDEC1:PUSH	AF
 	INC	DE
 	RST	$10
 	JR	HEXDECL
+
+DECDEC:	SUB	"0"
+	JP	C,REPORT_A
+	CP	$0A
+	JR	NC,ERROR_A
+	PUSH	BC
+	PUSH	DE
+	LD	HL,6
+	ADD	HL,SP
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	LD	HL,(K_CUR)
+	SBC	HL,DE
+	JR	NZ,DECMORE
+	RST	$10
+DECON:	POP	DE
+	POP	BC
+	INC	DE
+	DEC	BC
+	LD	A,B
+	OR	C
+	LD	A,(DE)
+	JR	NZ,DECDEC
+	JP	FPEND
+
+DECEND:	EX	AF,AF'
+	JR	Z,DECON
+	PUSH	AF
+	LD	HL,8
+	ADD	HL,SP
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+	CALL	ONE_SPACE
+	POP	AF
+	LD	(DE),A
+	JR	DECON
+
+DECMORE:EX	DE,HL
+	ADD	HL,DE
+	PUSH	DE
+; HL = end pointer, A = carry, remaining length on stack
+DEC10L:	DEC	HL
+	PUSH	HL
+	PUSH	AF
+	LD	C,(HL)
+	LD	B,$0A
+	CALL	MUL8
+	POP	AF	; A = carry
+	POP	DE	; DE = end pointer
+	POP	BC	; BC = remaining length
+	ADD	A,L
+	LD	(DE),A
+	LD	A,0
+	ADC	A,H
+	EX	AF,AF'	; A' = carry
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	Z,DECEND
+	EX	AF,AF'	; A = carry
+	PUSH	BC
+	EX	DE,HL
+	JR	DEC10L
