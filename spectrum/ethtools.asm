@@ -15,10 +15,14 @@ PROG:		EQU	0x5C53
 CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
 
-	ORG	43520	; 0xAA00
+	ORG	43264	; 0xA900
 	INCLUDE	"../secp256k1tab.asm"
-
-	DEFS	60000 - $
+	INCLUDE	"tobinary.asm"
+	DEFS	59994 - $
+; Floatingpoint decoding of a
+	JP	FPDEC
+; Hexadecimal decoding of a$
+	JP	HEXDEC
 ; Hasher channel initialization
 	JP	INITCH
 ; Ethereum address capitalization in a$
@@ -110,9 +114,8 @@ HASHKL:	LD	A,(HL)
 	DJNZ	HASHKL
 	RET
 
-; Ethereum address checker
-; Error codes: 0 OK, 1..40 wrong capitalization, >40 wrong format
-ETHADD:	LD	HL,(CH_ADD)
+VAR_FETCH:
+	LD	HL,(CH_ADD)
 	PUSH	HL
 	LD	HL,VARADD
 	LD	(CH_ADD),HL
@@ -122,6 +125,11 @@ ETHADD:	LD	HL,(CH_ADD)
 	CALL	STK_FETCH
 	LD	A,B
 	OR	A
+	RET
+
+; Ethereum address checker
+; Error codes: 0 OK, 1..40 wrong capitalization, >40 wrong format
+ETHADD:	CALL	VAR_FETCH
 	JR	NZ,ETHADDE
 	DEC	B
 	LD	A,C
@@ -194,38 +202,12 @@ INPUT:	LD	HL,6
 	RRCA
 	RRCA
 	CALL	Z,KECCAKR
-; Encode hexadecimal digit
-; In: A binary digit in the 0..F range
-; Out: A ascii digit, capitalized
-; Pollutes: F
-HEXD:	AND	0xF
-	ADD	A,0x90
-	DAA
-	ADC	A,0x40
-	DAA
-	SCF
-	RET
+	INCLUDE	"hex.asm"
 
 INPUTE:	CALL	INIT2
 	RES	3,(IY+TV_FLAG-ERR_NR)	; Work around another bug in INPUT
 	LD	A,0xD
 	SCF
-	RET
-
-; Decode hexadecimal digit
-; In: A ascii digit
-; Out: A binary digit, CF set, if no error
-HEXDD:	SUB	"0"
-	CCF
-	RET	NC
-	CP	0xA
-	RET	C
-	SUB	"A" - "0"
-	CCF
-	RET	NC
-	AND	0xDF
-	ADD	0xA
-	CP	0x10
 	RET
 
 	INCLUDE	"../keccak.asm"
