@@ -14,6 +14,7 @@ CURCHL:		EQU	0x5C51
 PROG:		EQU	0x5C53
 CH_ADD:		EQU	0x5C5D
 FLAGS2:		EQU	0x5C6A
+ATTR_T:		EQU	0x5C8F
 
 	ORG	43264	; 0xA900
 	INCLUDE	"../secp256k1tab.asm"
@@ -33,7 +34,32 @@ FLAGS2:		EQU	0x5C6A
 	JP	HIDEPW
 ; ECDSA signing of the hasher state
 SIGN:	CALL	ECDSAS
-	SET	5,(IY+FLAGS2-ERR_NR)
+; EIP-2 canonization
+	LD	HL,ECDSAM + 0x1F
+	BIT	7,(HL)			; not quite perfect, but good in practice
+	JR	Z,EIP2			; already EIP-2 compliant
+	PUSH	AF			; save V
+	LD	B,0x20
+TURNS:	LD	A,(HL)
+	CPL
+	LD	(HL),A
+	DEC	L
+	DJNZ	TURNS			; complement S
+	INC	L
+	PUSH	HL			; save ECDSAM
+	LD	B,0x20
+INCS:	INC	A
+	LD	(HL),A
+	JR	NZ,ADDQS
+	INC	L
+	LD	A,(HL)
+	DJNZ	INCS			; increment S
+ADDQS:	POP	HL			; restore ECDSAM
+	CALL	MODADDQ
+	POP	HL			; restore V
+	LD	A,0x37
+	SUB	H			; flip V
+EIP2:	SET	5,(IY+FLAGS2-ERR_NR)
 	LD	HL,KECCAKS + 0x61
 	LD	(HL),A
 	LD	DE,ECDSAM
@@ -49,14 +75,6 @@ SIGNL1:	LD	A,(DE)
 	LD	(HL),A
 	DJNZ	SIGNL1
 	RET
-; Passphrase input hidden by stars
-HIDEPW:	LD	HL,(CURCHL)
-	LD	(HL),PWOUT-0x100*(PWOUT/0x100)
-	INC	HL
-	LD	(HL),PWOUT/0x100
-	RET
-PWOUT:	LD	A,"*"
-	JP	PRINT_OUT
 
 ; Public key derivation from private key in k$
 PUBKEY:	LD	HL,(CH_ADD)
@@ -143,6 +161,44 @@ ETHADDE:PUSH	BC
 	EXX
 	RET
 
+; Passphrase input hidden by stars
+HIDEPW:	LD	HL,(CURCHL)
+	LD	DE,OLD_OUT
+	LDI
+	LDI
+	DEC	HL
+PWHIDE:	LD	(HL),PWOUT/0x100
+	DEC	HL
+	LD	(HL),PWOUT-0x100*(PWOUT/0x100)
+	RET
+PWOUT:	OR	A
+	JR	Z,PWREST
+	CP	0x0E
+	JR	Z,PWFLASH
+	CP	0x80
+	JR	Z,PWBLANK
+	LD	A,"*"
+PWBLANK:SCF
+OLD_OUT:EQU	$ + 1
+PWCTRL:	CALL	PRINT_OUT
+	RES	7,(IY+ATTR_T-ERR_NR)
+	LD	HL,(CURCHL)
+	INC	HL
+	JR	PWHIDE
+PWFLASH:CALL	PWBLANK
+	SET	7,(IY+ATTR_T-ERR_NR)
+	RET
+PWREST:	LD	HL,(CURCHL)
+	LD	DE,(OLD_OUT)
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	XOR	A
+	EX	DE,HL
+	JP	(HL)
+
+; Channel initialization
 INITCH:	LD	HL,(CH_TAB)
 	LD	A,H
 	OR	L
