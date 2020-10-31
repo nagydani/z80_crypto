@@ -1,9 +1,9 @@
    10 DEF FN h$(d)="0123456789ABCDEF"(d+1): DEF FN f$(a)=STR$ USR 59994: DEF FN n$(a$)=STR$ USR 59997: DEF FN r$(a$)=(CHR$ 128 AND a$="")+(CHR$ 129 AND LEN a$=1 AND a$>"\*")+(CHR$ (128+LEN a$ AND LEN a$<56) AND LEN a$<56 AND LEN a$>1)+(CHR$ (184+(LEN a$>255)) AND LEN a$>55)+(CHR$ INT (LEN a$/256) AND LEN a$>255)+(CHR$ (LEN a$-256*INT (LEN a$/256)) AND LEN a$>55)+a$
    20 DEF FN l$(a$)=(CHR$ (192+LEN a$ AND LEN a$<56) AND LEN a$<56)+(CHR$ (248+(LEN a$>255)) AND LEN a$>55)+(CHR$ INT (LEN a$/256) AND LEN a$>255)+(CHR$ (LEN a$-256*INT (LEN a$/256)) AND LEN a$>55)+a$: LET y$="ab9978946F329a525dE609f2c28C3A1e38128fF2"
    30 INPUT "Private key:"'"" AND USR 60009; LINE k$
-   40 IF USR 60006 THEN BEEP 1,0: GO TO 30
+   40 PRINT "Deriving address...": IF USR 60006 THEN BEEP 1,0: GO TO 30
    50 INPUT #15;a$: RANDOMIZE USR 60003
-   60 CLS : PRINT "address:"' BRIGHT 1;a$
+   60 CLS : PRINT AT 18,0;"address:"' BRIGHT 1;a$: LET q$="ethereum:"+a$: RANDOMIZE USR 59991
    70 INPUT "Use this key?[y] "; LINE c$: LET c$=c$( TO 0<LEN c$): IF c$="n" OR c$="N" THEN GO TO 30
    80 INPUT "Message or Tx?[m] "; LINE c$: LET c$=c$( TO 0<LEN c$): IF c$="t" OR c$="T" THEN GO TO 180
    90 INPUT "Message to sign:"' LINE m$
@@ -15,9 +15,9 @@
   150 PRINT "version: "; BRIGHT 1;2
   160 PRINT #1;"Press any key to continue.": PAUSE 0
   170 GO TO 60
-  180 LET f$=a$: INPUT "nonce? ";nonce'"gas price in GWei?[2] "; LINE p$'"gas limit?[21000] "; LINE l$'"to?[donate to author]"' LINE a$'"value in ETH? ";value'"data? "; LINE d$
+  180 LET f$=a$: INPUT "nonce? ";nonce'"gas price in GWei?[50] "; LINE p$'"gas limit?[21000] "; LINE l$'"to?[donate to author]"' LINE a$'"value in ETH? ";value'"data? "; LINE d$
   190 IF nonce<0 THEN GO TO 180
-  200 IF p$="" THEN LET p$="2"
+  200 IF p$="" THEN LET p$="50"
   210 LET gas price=VAL (p$+"e9")
   220 IF l$="" THEN LET l$="21000"
   230 IF a$="" THEN LET a$=y$
@@ -42,6 +42,8 @@
   420 IF v$="1C" THEN LET v$="26"
   430 LET t$=t$+FN r$(FN n$("0x"+v$))+FN r$(FN n$("0x"+s$( TO 64)))+FN r$(FN n$("0x"+s$(65 TO 128)))
   440 LET t$=FN l$(t$)
-  450 CLS : PRINT "Signed RLP:": BRIGHT 1: PRINT "0x";
-  460 FOR i=1 TO LEN t$: LET c=CODE t$(i): LET h=INT (c/16): PRINT FN h$(h);FN h$(c-16*h);: NEXT i: BRIGHT 0
-  470 LET a$=f$: GO TO 160
+  450 CLS : PRINT #1;AT 0,0;"Signed RLP:"' BRIGHT 1;"0x";: LET q$="https://etherscan.io/pushTx?hex=0x"
+  460 FOR i=1 TO LEN t$: LET c=CODE t$(i): LET h=INT (c/16): LET h$=FN h$(h)+FN h$(c-16*h): PRINT #1; BRIGHT 1;h$;: LET q$=q$+h$: NEXT i: BRIGHT 0
+  470 IF LEN t$>112 THEN PAUSE 0: CLS 
+  480 PRINT #1: IF LEN q$<=321 THEN RANDOMIZE USR 59991
+  490 LET a$=f$: PAUSE 0: GO TO 60
